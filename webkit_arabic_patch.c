@@ -1657,9 +1657,8 @@ void update_text_section (FILE * fil)
 	
 	{
 	  fseek (fil, secrec * i + sections + 0x10, SEEK_SET);
-	  fseek (fil, secrec * i + sections + 0x10, SEEK_SET);
 	  dynamic = readdword (fil);
-	  dynamicnum = readdword (fil) >> 4;
+	  dynamicnum = readdword (fil) >> 2;
 	  //printf ("dynamic@ %lx\n", dynamic);
 	}
       if (!strcmp (sectionname, ".hash"))
@@ -1823,22 +1822,29 @@ void rename_library (FILE * fil, char *orglibnam, char *newlibnam)
 {
   char *libname = malloc (256 * sizeof (char));
   unsigned long currlib = 0;
+  unsigned long currtag = 0;
   unsigned int i = 0;
   for (i = 0; i < dynamicnum; i++)
     
     {
-      fseek (fil, dynamic + (i << 4) + 0x4, SEEK_SET);
-      currlib = readdword (fil);
-      fseek (fil, dynstr + currlib, SEEK_SET);
-      readstring (fil, libname, 256);
-      
-	//printf ("lib: %d %s \n", i, libname);
-      if (!strcmp (libname, orglibnam))
+      fseek (fil, dynamic + (i << 2) + 0x0, SEEK_SET);
+      currtag = readdword (fil);
+      if (currtag == 0xe || currtag == 0x1)
+        {
+          fseek (fil, dynamic + (i << 2) + 0x4, SEEK_SET);
+          currlib = readdword (fil);
+          fseek (fil, dynstr + currlib, SEEK_SET);
+          readstring (fil, libname, 256);
+/*      
+printf ("tag: %lx lib: %d %s \n", currtag, i, libname);
+*/
+          if (!strcmp (libname, orglibnam))
 	
-	{
-	  fseek (fil, dynstr + currlib, SEEK_SET);
-	  writestring (fil, newlibnam, strlen (newlibnam));
-	}
+	    {
+	      fseek (fil, dynstr + currlib, SEEK_SET);
+  	      writestring (fil, newlibnam, strlen (newlibnam));
+    	    }
+        }
     }
   free (libname);
 }
@@ -1851,7 +1857,8 @@ void replace (FILE * fil, unsigned char *pattern, unsigned char *replacement,
   unsigned char *buffer = NULL;
   fseek (fil, 0, SEEK_SET);
   buffer = malloc (filesize * sizeof (unsigned char));
-  printf ("%ld bytes read\n", fread (buffer, 1, filesize, fil));
+  fread (buffer, 1, filesize, fil);
+  //printf ("%ld bytes read\n", );
   //printf ("size of file %ld \n", filesize);
   //fflush (stdout);
   for (i = 0; i < filesize - length; i++)
@@ -1885,7 +1892,8 @@ void findpatterns (FILE * fil, unsigned char *pattern, unsigned long length,
   unsigned long num = 0;
   fseek (fil, 0, SEEK_SET);
   buffer = malloc (filesize * sizeof (unsigned char));
-  printf ("%ld bytes read in\n", fread (buffer, 1, filesize, fil));
+  fread (buffer, 1, filesize, fil);
+  //printf ("%ld bytes read in\n", );
   //printf ("size of file %ld \n", filesize);
   //fflush (stdout);
   for (i = 0; i < filesize - length; i++)
@@ -1910,7 +1918,7 @@ void findpatterns (FILE * fil, unsigned char *pattern, unsigned long length,
 }
 void copyfile (FILE * fil, unsigned char *newfile) 
 {
-  unsigned char *buffer = malloc (filesize);
+  unsigned char *buffer = malloc (filesize * sizeof(char));
   FILE * nfil = fopen (newfile, "wb");
   fseek (fil, 0, SEEK_SET);
   fread (buffer, 1, filesize, fil);
@@ -1920,7 +1928,7 @@ void copyfile (FILE * fil, unsigned char *newfile)
 }
 int main (int argc, char *argv[]) 
 {
-  unsigned char *newfile = malloc (256);
+  unsigned char *newfile = malloc (256 * sizeof(char));
   unsigned char pattern1[] = { 0x50, 0xB1, 0x20, 0x46, 0x29, 0x46, 0x32, 0x46, 0x3B, 0x46 };
   unsigned char replacement1[] = { 0x00, 0xBF, 0x20, 0x46, 0x29, 0x46, 0x32, 0x46, 0x3B, 0x46 };
   unsigned char pattern2[] = { 0x80, 0x68, 0x88, 0xB0, 0x0A, 0x68, 0x00, 0x25, 0x43, 0x69, 0x06, 0xA8, 0x0D, 0x60, 0x19, 0x46 };	//+30
@@ -1932,7 +1940,7 @@ int main (int argc, char *argv[])
   unsigned long locations12[] = { 0 };
   unsigned long locations22[] = { 0 };
   unsigned long temp = 0;
-  printf("This patch (v.1BETA) was made by Brightidea @ xda-dev on 15th of Aug '2011\n");
+  printf("This patch (v.2BETA) was made by Brightidea @ xda-dev on 15th of Aug '2011\n");
   printf("Thank you Madmack for making this possible by sharing your method on the blog\n\n");
   printf("NOTE: I can't gurantee that it'll work - I can't even make claims that it can't do any harm\n\n");
   printf("*USE AT YOUR OWN RISK*\n\n");
@@ -1996,8 +2004,8 @@ int main (int argc, char *argv[])
   memset (locations22, sizeof (unsigned long) * 1, 0);
   findpatterns (libwebcore, pattern32, 16, locations22, 1);
   
-  printf ("JNI_OnLoad @ %lx, pattern1 @ %lx, pattern2 @ %lx & %lx\n",
-	    JNI_OnLoad, locations1[0], locations2[0], locations2[1]);
+  printf ("JNI_OnLoad @ %lx, pattern1 @ %lx, pattern2 @ %lx & %lx, pattern3 @ %lx, pattern4 @ %lx\n",
+	    JNI_OnLoad, locations1[0], locations2[0], locations2[1], locations12[0], locations22[0]);
   
   fclose (libwebcore);
   strcpy (newfile, argv[1]);
@@ -2005,7 +2013,6 @@ int main (int argc, char *argv[])
   remove (newfile);
   rename (argv[1], newfile);
 
-printf("%d %d %d %d %d\n",locations1[0],locations2[0],locations2[1],locations12[0],locations22[0]);
   if (locations1[0]==0 || locations2[0]==0 || locations2[1]==0 
       || locations12[0]==0 || locations22[0]==0)
   {
