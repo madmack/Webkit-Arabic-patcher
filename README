@@ -1,0 +1,5 @@
+This patcher is created by brightidea and I'm simply posting his sources on my github account.
+
+This utility takes only one argument: <path to libwebcore.so> and should spit out two files: libwebcore.so and lib__core.so. It also backs up the current libwebcore.so file in case you want to revert back.
+
+These newly created files should render Arabic text correctly in the default Browser and Gmail app in Android <= 2.3.x
