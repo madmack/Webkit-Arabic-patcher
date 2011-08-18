@@ -1789,7 +1789,7 @@ void add_symbol_hash (FILE * fil, unsigned long sym, char *symbol)
       writedword (fil, sym);
     }
 }
-void rename_symbol (FILE * fil, char *symbol) 
+void rename_symbol (FILE * fil, char *symbol, char *newsymbol) 
 {
   char *symbolname = malloc (256 * sizeof (char));
   unsigned long currsym = 0;
@@ -1811,9 +1811,8 @@ void rename_symbol (FILE * fil, char *symbol)
 	  JNI_OnLoad = readdword (fil);
 	  remove_symbol_hash (fil, symbol);
 	  fseek (fil, dynstr + currsym, SEEK_SET);
-	  memcpy (symbolname, "__", 2);
-	  writestring (fil, symbolname, strlen (symbol));
-	  add_symbol_hash (fil, i, symbolname);
+	  writestring (fil, newsymbol, strlen (symbol));
+	  add_symbol_hash (fil, i, newsymbol);
 	}
     }
   free (symbolname);
@@ -1847,40 +1846,6 @@ printf ("tag: %lx lib: %d %s \n", currtag, i, libname);
         }
     }
   free (libname);
-}
-void replace (FILE * fil, unsigned char *pattern, unsigned char *replacement,
-	 unsigned long length) 
-{
-  unsigned long i = 0;
-  unsigned long j = 0;
-  unsigned long flag = 0;
-  unsigned char *buffer = NULL;
-  fseek (fil, 0, SEEK_SET);
-  buffer = malloc (filesize * sizeof (unsigned char));
-  fread (buffer, 1, filesize, fil);
-  //printf ("%ld bytes read\n", );
-  //printf ("size of file %ld \n", filesize);
-  //fflush (stdout);
-  for (i = 0; i < filesize - length; i++)
-    
-    {
-      flag = -1;
-      for (j = 0; j < length; j++)
-	if (buffer[i + j] != pattern[j])
-	  
-	  {
-	    flag = 0;
-	    break;
-	  }
-      if (flag == -1)
-	
-	{
-	  //printf ("replacing....!!\n");
-	  fseek (fil, i, SEEK_SET);
-	  fwrite (replacement, 1, length, fil);
-	}
-    }
-  free (buffer);
 }
 void findpatterns (FILE * fil, unsigned char *pattern, unsigned long length,
 	      unsigned long *locations, unsigned long number) 
@@ -1916,6 +1881,18 @@ void findpatterns (FILE * fil, unsigned char *pattern, unsigned long length,
     }
   free (buffer);
 }
+void replace (FILE * fil, unsigned char *pattern, unsigned char *replacement,
+	 unsigned long length) 
+{
+  unsigned long locations[] = {0};
+  findpatterns (fil, pattern, length,locations,1); 
+  //printf ("replacing....!!\n");
+  if (locations[0]!=0)
+  {
+    fseek (fil, locations[0], SEEK_SET);
+    fwrite (replacement, 1, length, fil);
+  }
+}
 void copyfile (FILE * fil, unsigned char *newfile) 
 {
   unsigned char *buffer = malloc (filesize * sizeof(char));
@@ -1929,6 +1906,8 @@ void copyfile (FILE * fil, unsigned char *newfile)
 int main (int argc, char *argv[]) 
 {
   unsigned char *newfile = malloc (256 * sizeof(char));
+  unsigned char *citer = NULL;
+  unsigned char *bkslash = NULL;
   unsigned char pattern1[] = { 0x50, 0xB1, 0x20, 0x46, 0x29, 0x46, 0x32, 0x46, 0x3B, 0x46 };
   unsigned char replacement1[] = { 0x00, 0xBF, 0x20, 0x46, 0x29, 0x46, 0x32, 0x46, 0x3B, 0x46 };
   unsigned char pattern2[] = { 0x80, 0x68, 0x88, 0xB0, 0x0A, 0x68, 0x00, 0x25, 0x43, 0x69, 0x06, 0xA8, 0x0D, 0x60, 0x19, 0x46 };	//+30
@@ -1940,7 +1919,7 @@ int main (int argc, char *argv[])
   unsigned long locations12[] = { 0 };
   unsigned long locations22[] = { 0 };
   unsigned long temp = 0;
-  printf("This patch (v.2BETA) was made by Brightidea @ xda-dev on 15th of Aug '2011\n");
+  printf("This patch (v.3BETA) was made by Brightidea @ xda-dev on 15th of Aug '2011\n");
   printf("Thank you Madmack for making this possible by sharing your method on the blog\n\n");
   printf("NOTE: I can't gurantee that it'll work - I can't even make claims that it can't do any harm\n\n");
   printf("*USE AT YOUR OWN RISK*\n\n");
@@ -1951,6 +1930,12 @@ int main (int argc, char *argv[])
       return 1;
     }
   libwebcore = fopen (argv[1], "rb+");
+  if (libwebcore == NULL)
+  {
+    printf ("Error opening file");
+    free (newfile);
+    return 1;
+  }
   hdr = readdword (libwebcore);
   if (hdr != 0x464c457fL)
     
@@ -1963,6 +1948,13 @@ int main (int argc, char *argv[])
   printf("Applying patch...\n");
   fseek (libwebcore, 0, SEEK_END);
   filesize = ftell (libwebcore);
+  if (filesize==0)
+  {
+    printf("error opening file..");
+    fclose (libwebcore);
+    free (newfile);
+    return 1;
+  }
   strcpy (newfile, argv[1]);
   strcat (newfile, ".bak");
   copyfile (libwebcore, newfile);
@@ -1992,7 +1984,7 @@ int main (int argc, char *argv[])
   */
   update_prog_hdr (libwebcore);
   update_text_section (libwebcore);
-  rename_symbol (libwebcore, "JNI_OnLoad");
+  rename_symbol (libwebcore, "JNI_OnLoad", "__I_OnLoad");
   rename_library (libwebcore, "libwebcore.so", "lib__bcore.so");
   replace (libwebcore, pattern1, replacement1, 10);
   memset (locations1, sizeof (unsigned long) * 1, 0);
@@ -2009,7 +2001,19 @@ int main (int argc, char *argv[])
   
   fclose (libwebcore);
   strcpy (newfile, argv[1]);
-  memcpy (newfile + 3, "__", 2 * sizeof (unsigned char));
+  for (citer=newfile;*citer!=NULL;citer++)
+  {
+    if (*citer=='\\' || *citer=='/')
+      bkslash=citer;
+  }
+  if (bkslash!=NULL)
+  {
+    *(++bkslash)=NULL;
+    strcat(newfile,"lib__bcore.so");
+  }
+  else
+    memcpy (newfile + 3, "__", 2 * sizeof (unsigned char));
+  printf("Writing file %s\n",newfile);
   remove (newfile);
   rename (argv[1], newfile);
 
@@ -2021,7 +2025,7 @@ int main (int argc, char *argv[])
     return 1;
   }
 
-  newlibwebcore = fopen ("libwebcore.so", "wb");
+  newlibwebcore = fopen (argv[1], "wb");
   
 /*
 36b0 (d993c+e)
