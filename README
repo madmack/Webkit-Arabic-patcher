@@ -6,7 +6,7 @@ These newly created files should render Arabic text correctly in the default Bro
 
 
 
-To compile 3.8B of the patcher in Linux:
+To compile 3.91B of the patcher in Linux:
 
 gcc -D_7ZIP_ST webkit_arabic_patch.c C/LzmaLib.c C/Alloc.c C/LzmaEnc.c C/LzmaDec.c C/LzFind.c -o webkit
 
